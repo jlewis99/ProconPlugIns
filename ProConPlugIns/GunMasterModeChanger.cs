@@ -1,10 +1,15 @@
 ﻿/* 
  *   GunMaster Mode Changer
- *   https://forum.myrcon.com/showthread.php?
+ *   
+ *
+ *   ByteMe! - JLewis99
+ *   https://forum.myrcon.com/member.php?38357-jlewis99
  *
  *   Version 1.0
  *   ByteMe  02/12/2016
  *   Tested with BATTLEFIELD 4
+ *
+ * Version 1.0.1  02/16/2016 Fixed a bug with Night Mode Weapons on night maps
  */
 
 using System;
@@ -38,6 +43,8 @@ namespace PRoConEvents
         private string m_strPRoConVersion;
         private bool m_isPluginEnabled;
 
+        private bool m_DEBUG = true;  // show debug messages
+
         //vars.gunMasterWeaponsPreset 0 = Classic
         //vars.gunMasterWeaponsPreset 1 = Standard
         //vars.gunMasterWeaponsPreset 2 = Pistols
@@ -56,14 +63,14 @@ namespace PRoConEvents
         int iDelay = 30;
         int nextPreset = 0;
         int lastPreset = 0;
-        int maxRand = 4;
+        int maxRand = 5;// 4 Without Night mode;
 
         string sLastLoadedLevel = "";
         bool doReset = false;
 
         Random rnd = null;
 
-        String[] Presets = { "Standard", "Classic", "Pistols", "DLC", "Troll" };
+        String[] Presets = { "Standard", "Classic", "Pistols", "DLC", "Troll", "Night Weapons!" };
         #endregion
         
         public pGunMasterRandomizer()
@@ -244,6 +251,10 @@ namespace PRoConEvents
     <p><h3>Allow Consecutive GunMaster Modes:</h3> Turn this off to prevent the next Gun Master game from having the same Gun Master mode as the current Gun Master game.</p>
     <p><h3>Allow Randomized GunMaster Modes:</h3> This forces GunMaster modes to be selected at random.  If not allowed the Gun Master modes simply change modes in order from Standard to Classic to Pistols to DLC to Troll and then back to Standard.  If a mode is not allowed it will skip that mode.</p>
     <p><h4>As a side note:  If all modes are not allowed, the Standard mode is forced, even if not allowed since GunMaster is required to have atleast one mode.</h4></p>
+
+If you want to test it before uploading it, feel free to join us on our server TAG 
+http://battlelog.battlefield.com/bf4/servers/show/PC/0548ce7d-b3a7-4f92-b742-b61afeb71fab/TAG-60Hz-HC-MiniMap-Mapvote-MultiMode-NoHighPingers/
+ and join us on TeamSpeak TS 208.100.45.83:10000
 ";
         }
 
@@ -354,6 +365,9 @@ namespace PRoConEvents
         public override void OnLevelLoaded(string mapFileName, string gamemode, int roundsPlayed, int roundsTotal)
         {
             base.OnLevelLoaded(mapFileName, gamemode, roundsPlayed, roundsTotal);
+            if (m_DEBUG) this.ExecuteCommand("procon.protected.pluginconsole.write", "^bOnLevelLoaded()^2");
+
+            bool bNightMap = (mapFileName == "XP5_Night_01");
 
             int iCountOfEnabledGameModes = CountOfEnabledGMModes();
 
@@ -363,13 +377,15 @@ namespace PRoConEvents
 
             //this.ExecuteCommand("procon.protected.pluginconsole.write", "^bGunMaster Level loaded.  gamemode:" + gamemode+" ^2");
             String sLevelLoaded = mapFileName + gamemode;
+            if (m_DEBUG) this.ExecuteCommand("procon.protected.pluginconsole.write", "^bsLevelLoaded:"+sLevelLoaded+"^2");
+            if (m_DEBUG) this.ExecuteCommand("procon.protected.pluginconsole.write", "^bsLastLoadedLevel:" + sLastLoadedLevel+"^2");
             doReset = false;
             if (sLastLoadedLevel != sLevelLoaded)
             {
                 sLastLoadedLevel = sLevelLoaded;
                 doReset = true;
             }
-
+            if (m_DEBUG) this.ExecuteCommand("procon.protected.pluginconsole.write", "^bdoReset:"+doReset.ToString()+"^2");
             if (gamemode == "GunMaster0"  || gamemode == "GunMaster1")
             {
                 //this.ExecuteCommand("procon.protected.pluginconsole.write", "^bGunMaster randomizing. ^2");
@@ -377,11 +393,12 @@ namespace PRoConEvents
                 //this.ExecuteCommand("procon.protected.pluginconsole.write", "^bGunMaster nextPreset: " + nextPreset.ToString()+". ^2");
                 if (doReset)
                 {
+                    if (m_DEBUG) this.ExecuteCommand("procon.protected.pluginconsole.write", "^bin(doReset)^2");
                     if (rnd == null)
                         rnd = new Random();
 
                     // support night mode for Zavod Graveyard Shift (NOTE: The there are two versions of this but both have the same mapFileName so it should work on both)
-                    if ((m_EnableNightOnlyGunsForNightGM == enumBoolYesNo.Yes) && (mapFileName == "XP5_Night_01"))
+                    if ((m_EnableNightOnlyGunsForNightGM == enumBoolYesNo.Yes) && bNightMap)
                     {
                         nextPreset = 5;
                     }
@@ -410,7 +427,7 @@ namespace PRoConEvents
                             while (!bMapSelected)
                             {
                                 nextPreset++;
-                                if (nextPreset > 4)
+                                if ((nextPreset > maxRand) || (!bNightMap && (nextPreset > (maxRand -1))))
                                     nextPreset = 0;
 
                                 if ((nextPreset == 0) && (m_EnableStandardMode == enumBoolYesNo.Yes)) bMapSelected = true;
@@ -432,6 +449,7 @@ namespace PRoConEvents
                                 if ((nextPreset == 2) && (m_EnablePistolsMode == enumBoolYesNo.Yes)) bMapSelected = true;
                                 if ((nextPreset == 3) && (m_EnableDLCMode == enumBoolYesNo.Yes)) bMapSelected = true;
                                 if ((nextPreset == 4) && (m_EnableTrollMode == enumBoolYesNo.Yes)) bMapSelected = true;
+                                if ((nextPreset == 5) && (bNightMap)) bMapSelected = true;
                                 if ((m_EnableAllowConsecutiveGMModes == enumBoolYesNo.No) && (lastPreset == nextPreset)) bMapSelected = false; // Force it to rerandomize
                             }
                         }
@@ -439,19 +457,25 @@ namespace PRoConEvents
                         //while (lastPreset == nextPreset)
                         //    nextPreset = rnd.Next(0, maxRand + 1);  // NOTE: We add one because when maxRand is hit, minRand is returned
                     }
-
+                    if (m_DEBUG) this.ExecuteCommand("procon.protected.pluginconsole.write", "^bnextPreset is:"+nextPreset.ToString()+"^2");
+                    if (m_DEBUG) this.ExecuteCommand("procon.protected.pluginconsole.write", "^bSetting Weapon Preset.^2");
                     this.ExecuteCommand("procon.protected.send", "vars.gunMasterWeaponsPreset", nextPreset.ToString());
-                    //this.ExecuteCommand("procon.protected.send", "admin.say", "GunMaster Mode is now in " + Presets[nextPreset]+" mode.", "all");
+                    if (m_DEBUG) this.ExecuteCommand("procon.protected.pluginconsole.write", "^bWeapon Preset Completed.^2");
+
                     this.ExecuteCommand("procon.protected.pluginconsole.write", "^bGunMaster Mode is now in " + Presets[nextPreset] + " mode. ^2");
 
+                    if (m_DEBUG) this.ExecuteCommand("procon.protected.pluginconsole.write", "^BRestarting Round^2");
                     this.ExecuteCommand("procon.protected.send", "mapList.restartRound");
                     doReset = false;
+                    if (m_DEBUG) this.ExecuteCommand("procon.protected.pluginconsole.write", "^bFinished doReset().^2");
                 }
                 else
                 {
                     // Only notify if we are currently starting GunMaster
                     this.ExecuteCommand("procon.protected.send", "admin.say", "GunMaster Mode is now in " + Presets[nextPreset] + " mode.", "all");
                     this.ExecuteCommand("procon.protected.pluginconsole.write", "^bGunMaster Mode is now in " + Presets[nextPreset] + " mode. ^2");
+
+                    if (m_DEBUG) this.ExecuteCommand("procon.protected.pluginconsole.write", "^BNOT Restarting Round^2");
                 }
             }
         }
